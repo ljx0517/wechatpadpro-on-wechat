@@ -26,7 +26,8 @@ COPY . /app
 WORKDIR /app
 
 #FROM --platform=linux/amd64 gcr.io/distroless/cc
-FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
+#FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
+FROM gcc
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=builder /app /app
 WORKDIR /app
@@ -46,7 +47,7 @@ WORKDIR /app
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PATH="/usr/local/bin:$PATH"
-RUN /usr/local/bin/uv sync
+RUN uv sync
 # Run the FastAPI application by default
 #CMD ["fastapi", "run", "--host", "0.0.0.0", "/app/.venv/lib/python3.12/site-packages/uv_docker_example"]
 CMD ["python", "app.py"]
