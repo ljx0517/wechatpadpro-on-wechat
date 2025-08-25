@@ -46,8 +46,6 @@ WORKDIR /app
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PATH="/usr/local/bin:$PATH"
-RUN ls /usr/local/bin
-RUN ls
 RUN uv sync
 # Run the FastAPI application by default
 #CMD ["fastapi", "run", "--host", "0.0.0.0", "/app/.venv/lib/python3.12/site-packages/uv_docker_example"]
