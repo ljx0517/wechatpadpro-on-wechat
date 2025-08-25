@@ -14,7 +14,8 @@ import random
 @plugins.register(
     name="Keyword",
     desire_priority=900,
-    hidden=True,
+    hidden=False,
+    enabled=False,
     desc="关键词匹配过滤",
     version="0.1",
     author="fengyege.top",

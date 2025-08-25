@@ -90,7 +90,10 @@ class WxpadClient:
             raise Exception("此接口需要普通用户密钥，请先使用管理接口生成授权码，或在配置文件中设置 wechatpadpro_user_key")
 
         url = self.base_url + path
-        headers = {'Content-Type': 'application/json'}
+        headers = {
+            'Content-Type': 'application/json',
+            # 'Authorization': f'Bearer {final_user_key}'
+        }
         # 添加用户密钥到查询参数
         if params is None:
             params = {}
@@ -294,7 +297,7 @@ class WxpadClient:
         }
         return self._post_with_user_key('/login/GetLoginQrCodeNewX', data=data, user_key=user_key)
 
-    def get_login_status(self, user_key):
+    def get_login_status(self, user_key=None):
         """获取在线状态
 
         Args:

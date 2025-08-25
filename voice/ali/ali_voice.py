@@ -78,7 +78,7 @@ class AliVoice(Voice):
             logger.info("[Ali] VoicetoText = {}".format(text))
             reply = Reply(ReplyType.TEXT, text)
         else:
-            reply = Reply(ReplyType.ERROR, "抱歉，语音识别失败")
+            reply = Reply(ReplyType.ERROR, "抱歉，Ali语音识别失败")
         return reply
 
     def get_valid_token(self):

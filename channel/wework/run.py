@@ -1,7 +1,7 @@
 import os
 import time
 os.environ['ntwork_LOG'] = "ERROR"
-import ntwork
+import lib.ntwork as ntwork
 
 wework = ntwork.WeWork()
 

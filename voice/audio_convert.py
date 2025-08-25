@@ -210,6 +210,8 @@ def any_to_wav(any_path, wav_path):
     """
     把任意格式转成wav文件
     """
+    if os.path.exists(wav_path):
+        return
     if any_path.endswith(".wav"):
         shutil.copy2(any_path, wav_path)
         return

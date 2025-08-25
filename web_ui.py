@@ -202,8 +202,8 @@ def get_avatar_image():
         return None
 
 def verify_login(username, password):
-    correct_username = conf().get("web_ui_username", "dow")
-    correct_password = conf().get("web_ui_password", "dify-on-wechat")
+    correct_username = conf().get("web_ui_username", "admin")
+    correct_password = conf().get("web_ui_password", "admin")
     if username == correct_username and password == correct_password:
         return True
     return False

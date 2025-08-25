@@ -7,7 +7,7 @@ from plugins import *
     name="CustomDifyApp",
     desire_priority=0,
     hidden=True,
-    enabled=True,
+    enabled=False,
     desc="根据群聊环境自动选择相应的Dify应用",
     version="0.2",
     author="zexin.li, hanfangyuan",

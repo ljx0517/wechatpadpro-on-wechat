@@ -21,6 +21,7 @@ from plugins import *
     name="BDunit",
     desire_priority=0,
     hidden=True,
+    enabled=False,
     desc="Baidu unit bot system",
     version="0.1",
     author="jackson",

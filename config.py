@@ -8,13 +8,28 @@ import copy
 
 from common.log import logger
 
+
 # 将所有可用的配置项写在字典里, 请使用小写字母
 # 此处的配置值无实际意义，程序不会读取此处的配置，仅用于提示格式，请将配置加入到config.json中
 available_setting = {
     # webui配置
     "web_ui_port": 7860,
-    "web_ui_username": "dow",
-    "web_ui_password": "dify-on-wechat",
+    "web_ui_username": "admin",
+    "web_ui_password": "admin",
+    "clean_at_symbol": False,
+    "message_expires_in_seconds": 300, # 超过多少秒的消息不处理
+
+    "redis_host": "",
+    "redis_pass": "",
+    "redis_port": "",
+    "redis_db": 1,
+
+    "mysql_hostname": "",
+    "mysql_username": "",
+    "mysql_password": "",
+    "mysql_database": "",
+
+
     # 错误回复消息
     "error_reply": "我暂时遇到了一些问题，请您稍后重试~",
     # openai api配置
@@ -28,6 +43,7 @@ available_setting = {
     "use_azure_chatgpt": False,  # 是否使用azure的chatgpt
     "azure_deployment_id": "",  # azure 模型部署名称
     "azure_api_version": "",  # azure api版本
+    "ignore_myself_message": False,
     # Bot触发配置
     "single_chat_prefix": ["bot", "@bot"],  # 私聊时文本需要包含该前缀才能触发机器人回复
     "single_chat_reply_prefix": "[bot] ",  # 私聊时自动回复的前缀，用于区分真人
@@ -40,6 +56,7 @@ available_setting = {
     "group_chat_keyword": [],  # 群聊时包含该关键词则会触发机器人回复
     "group_at_off": False,  # 是否关闭群聊时@bot的触发
     "group_name_white_list": ["ChatGPT测试群", "ChatGPT测试群2"],  # 开启自动回复的群名称列表
+    "group_name_white_list_name_table": {}, #自动生成
     "group_name_keyword_white_list": [],  # 开启自动回复的群名称关键词列表
     "group_chat_in_one_session": ["ChatGPT测试群"],  # 支持会话上下文共享的群名称
     "nick_name_black_list": [],  # 用户昵称黑名单
@@ -239,6 +256,7 @@ class Config(dict):
         if d is None:
             d = {}
         for k, v in d.items():
+
             self[k] = v
         # user_datas: 用户数据，key为用户名，value为用户数据，也是dict
         self.user_datas = {}
@@ -332,6 +350,18 @@ def load_config():
 
     # 将json字符串反序列化为dict类型
     config = Config(json.loads(config_str))
+    group_names = config.get('group_name_white_list')
+    if group_names:
+        from database.group_members_db import get_group_id_by_name
+        groups = get_group_id_by_name(group_names)
+        group_name_table = {}
+        group_ids = []
+        for (group_id, group_name) in groups:
+            group_ids.append(group_id)
+            group_name_table[group_id] = group_name
+        group_names += group_ids
+        config.set('group_name_white_list', group_names)
+        config.set('group_name_white_list_name_table', group_name_table)
 
     # override config with environment variables.
     # Some online deployment platforms (e.g. Railway) deploy project from github directly. So you shouldn't put your secrets like api key in a config file, instead use environment variables to override the default config.

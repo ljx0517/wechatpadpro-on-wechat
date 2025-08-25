@@ -2,34 +2,26 @@ import os
 import time
 import json
 import threading
-import uuid
+import traceback
 import base64
 import requests
-import tempfile
-import urllib.request
-from pydub import AudioSegment
 from io import BytesIO
-import pysilk
-import subprocess
-from PIL import Image
-import io
-import qrcode
 import sys
 import websocket
-import urllib.parse
-import mimetypes
-import shutil
+
 
 from bridge.context import Context, ContextType
 from bridge.reply import Reply, ReplyType
-from channel.chat_channel import ChatChannel, get_group_member_display_name
+from cache import data_cache
+from channel.chat_channel import ChatChannel, check_contain
 from channel.wxpad.wxpad_message import WechatPadProMessage as WxpadMessage
 from common.log import logger
 from common.singleton import singleton
 from common.tmp_dir import TmpDir
-from config import conf, save_config
+from config import conf
 from lib.wxpad.client import WxpadClient
-from voice.audio_convert import mp3_to_silk
+import uuid
+from PIL import Image
 
 MAX_UTF8_LEN = 2048
 ROBOT_STAT_PATH = os.path.join(os.path.dirname(__file__), '../../resource/robot_stat.json')
@@ -67,6 +59,7 @@ class WxpadChannel(ChatChannel):
 
     def __init__(self):
         super().__init__()
+        self.message_expires_in_seconds = int(conf().get('message_expires_in_seconds', 300))
         # 直接使用WeChatPadPro配置
         self.base_url = conf().get("wechatpadpro_base_url")
         # 从配置文件读取管理员密钥和普通密钥
@@ -195,7 +188,7 @@ class WxpadChannel(ChatChannel):
             logger.debug(f"[wxpad] 生成授权码结果: {result}")
 
             if result.get("Code") == 200:
-                auth_keys = result.get("Data")
+                auth_keys = result.get("Data")['authKeys']
 
                 # 根据API文档，Data是一个字符串列表
                 if isinstance(auth_keys, list) and len(auth_keys) > 0:
@@ -327,7 +320,8 @@ class WxpadChannel(ChatChannel):
         """使用轮询辅助函数等待用户确认"""
         success, _ = self._poll_status(
             api_call_func=lambda: self.client.get_login_status(self.client.user_key),
-            success_condition_func=lambda res: res.get("Code") == 200 and res.get("Data", {}).get("loginState") == 1,
+            # success_condition_func=lambda res: res.get("code") == 200 and res.get("data", {}).get("loginState") == 1,
+            success_condition_func=lambda res: res.get("Code") == 200 and res.get("Data", {}).get("state") == 1,
             timeout=timeout,
             interval=5,
             description="用户确认登录"
@@ -351,7 +345,7 @@ class WxpadChannel(ChatChannel):
 
             # 从返回结果中提取二维码信息（根据实际API返回格式调整）
             data = qr_result.get("Data", {})
-            qr_url = data.get("QrCodeUrl") or data.get("qrUrl") or data.get("QrUrl") or data.get("url")
+            qr_url = data.get("QrCodeUrl") or data.get("qrCodeUrl") or data.get("qrUrl") or data.get("QrUrl") or data.get("url")
 
             if not qr_url:
                 logger.error(f"[wxpad] 未获取到二维码链接，返回内容: {qr_result}")
@@ -378,13 +372,16 @@ class WxpadChannel(ChatChannel):
                 qr.add_data(final_qr_data)
                 qr.make(fit=True)
                 qr.print_ascii(out=sys.stdout)
+                img = qr.make_image(fill_color="black", back_color="white")
+                img.save("login_scan.png")
+
             except Exception as e:
                 logger.warning(f"[wxpad] 控制台二维码渲染失败: {e}")
             
             # 使用轮询辅助函数等待扫码登录
             success, login_data = self._poll_status(
                 api_call_func=lambda: self.client.check_login_status(self.client.user_key),
-                success_condition_func=lambda res: res.get("Code") == 200 and res.get("Data", {}).get("loginState") == 1,
+                success_condition_func=lambda res: res.get("Code") == 200 and res.get("Data", {}).get("state") == 1,
                 timeout=240,
                 interval=2,
                 description="扫码登录"
@@ -485,27 +482,37 @@ class WxpadChannel(ChatChannel):
 
             # 解析消息
             data = json.loads(message)
-
+            if data.get('type') == 'heartbeat':
+                return
             # WebSocket消息格式：直接是消息对象，不像HTTP那样包装在Code/Data中
             if isinstance(data, dict) and 'msg_id' in data:
+                # 转换并处理消息
+                standard_msg = self._convert_message(data)
+                msg_id = standard_msg.get('NewMsgId', False) or standard_msg.get('MsgId', False)
+                saved = msg_id and data_cache.get(f'''message:{msg_id}''')
+                if saved:
+                    logger.info(f"[wxpad] message[{msg_id}] saved, ignore it.")
+                    return
                 # 单条消息处理
                 try:
-                    from_user = self._extract_str(data.get('from_user_name', {}))
-                    msg_type = data.get('msg_type', 1)
+                    from_user = standard_msg.get('FromUserName', "") # self._extract_str(data.get('from_user_name', {}))
+                    msg_type = standard_msg.get('MsgType') # data.get('msg_type', 1)
 
                     # 简化显示信息，不调用API获取昵称
                     if "@chatroom" in from_user:
                         # 群聊消息 - 只显示ID，避免重复API调用
-                        logger.info(f"[wxpad] 处理WebSocket消息: from={from_user}, type={msg_type}")
+                        logger.info(f"[wxpad] 处理WebSocket消息[群聊]: from={from_user}, type={msg_type}")
                     else:
                         # 私聊消息 - 只显示ID，避免重复API调用
-                        logger.info(f"[wxpad] 处理WebSocket消息: from={from_user}, type={msg_type}")
-
-                    # 转换并处理消息
-                    standard_msg = self._convert_message(data)
+                        logger.info(f"[wxpad] 处理WebSocket消息[私聊]: from={from_user}, type={msg_type}")
+                    logger.debug(f'_handle_message start: msg_id {msg_id}')
+                    t1 = time.time()
                     self._handle_message(standard_msg)
+                    logger.debug(f'_handle_message end: use {time.time() - t1} seconds')
                 except Exception as e:
-                    logger.error(f"[wxpad] 处理WebSocket消息异常: {e}")
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    stack_info = ''.join(traceback.format_tb(exc_traceback))
+                    logger.error(f"[wxpad] 处理WebSocket消息异常: {e}", exc_info=True)
             elif isinstance(data, list):
                 # 多条消息处理
                 logger.info(f"[wxpad] 收到 {len(data)} 条WebSocket消息")
@@ -571,15 +578,15 @@ class WxpadChannel(ChatChannel):
     def _should_ignore_message(self, xmsg):
         """统一的消息过滤检查"""
         # 1. 过期消息检查
-        if hasattr(xmsg, 'create_time') and xmsg.create_time:
-            try:
-                current_time = int(time.time())
-                msg_time = int(xmsg.create_time)
-                if msg_time < current_time - 60 * 5:  # 5分钟过期
-                    logger.debug(f"[wxpad] ignore expired message from {xmsg.from_user_id}")
-                    return True
-            except (ValueError, TypeError):
-                pass  # 时间格式无效时继续处理
+        # if hasattr(xmsg, 'create_time') and xmsg.create_time:
+        #     try:
+        #         current_time = int(time.time())
+        #         msg_time = int(xmsg.create_time)
+        #         if msg_time < current_time - self.message_expires_in_seconds:  # 5分钟过期
+        #             logger.debug(f"[wxpad] ignore expired message from {xmsg.from_user_id}")
+        #             return True
+        #     except (ValueError, TypeError):
+        #         pass  # 时间格式无效时继续处理
 
         # 2. 非用户消息过滤
         if xmsg._is_non_user_message(xmsg.msg_source, xmsg.from_user_id):
@@ -587,7 +594,7 @@ class WxpadChannel(ChatChannel):
             return True
 
         # 3. 自己发送的消息过滤
-        if hasattr(xmsg, 'from_user_id') and xmsg.from_user_id == self.wxid:
+        if conf().get("ignore_myself_message", True) and hasattr(xmsg, 'from_user_id') and xmsg.from_user_id == self.wxid:
             logger.debug(f"[wxpad] ignore message from myself: {xmsg.from_user_id}")
             return True
 
@@ -599,12 +606,48 @@ class WxpadChannel(ChatChannel):
         return False
 
     def _handle_message(self, msg):
+        create_time = msg.get('CreateTime')
+        current_time = int(time.time())
+        if create_time and int(create_time) < current_time - self.message_expires_in_seconds:  # 5分钟过期
+            logger.debug(f"[wxpad] ignore expired message from {msg.get('FromUserName')}")
+            return
+
+
+        _form_Name = msg.get('FromUserName')
+        group_id = None
+        if '@chatroom' in msg.get('FromUserName'):
+            group_id = msg.get('FromUserName')
+
+        if '@chatroom' in msg.get('ToUserName'):
+            group_id = msg.get('ToUserName')
+
+        if not group_id:
+            return
+        group_name_white_list_name_table = conf().get('group_name_white_list_name_table')
+        if group_id:
+            msg['group_name'] = group_name = group_name_white_list_name_table.get(group_id, None)
+
+        group_name_white_list = conf().get("group_name_white_list", [])
+        group_name_keyword_white_list = conf().get("group_name_keyword_white_list", [])
+        if not any(
+                [
+                    group_name in group_name_white_list,
+                    "ALL_GROUP" in group_name_white_list,
+                    check_contain(group_name, group_name_keyword_white_list),
+                ]
+        ):
+            return True
+
         xmsg = WxpadMessage(msg, self.client)
 
         # 统一过滤检查
         if self._should_ignore_message(xmsg):
             # 简化过滤日志显示，避免重复API调用
             logger.debug(f"[wxpad] 消息被过滤: from={xmsg.from_user_id}, reason=过滤规则")
+            return
+
+        # 不是群消息直接忽略
+        if not xmsg.is_group:
             return
 
         # 格式化有效消息日志显示
@@ -642,21 +685,21 @@ class WxpadChannel(ChatChannel):
         elif xmsg.ctype == ContextType.VOICE:
             logger.debug(f"[wxpad] 检测到语音消息，开始下载处理")
             xmsg.prepare()  # 触发语音下载
+        # 如果是引用图片的文本消息，也需要准备引用图片
+        if xmsg.ctype == ContextType.TEXT and hasattr(xmsg, '_refer_image_info') and xmsg._refer_image_info.get(
+                'has_refer_image'):
+            logger.debug(f"[wxpad] 检测到引用图片的文本消息，开始准备引用图片")
+            xmsg.prepare()  # 触发引用图片下载和缓存
+            # 如果是引用文件的文本消息，也需要准备引用文件
+        elif xmsg.ctype == ContextType.TEXT and hasattr(xmsg, '_refer_file_info') and xmsg._refer_file_info.get(
+                'has_refer_file'):
+            logger.debug(f"[wxpad] 检测到引用文件的文本消息，开始准备引用文件")
+            xmsg.prepare()  # 触发引用文件下载和缓存
 
         # 处理消息
         context = self._compose_context(xmsg.ctype, xmsg.content, msg=xmsg, isgroup=xmsg.is_group)
+        # logger.warning(f"[wxpad] context: {xmsg}")
         if context is not None:
-            # 只有成功生成上下文后，才处理引用图片/文件的下载和缓存
-            # 如果是引用图片的文本消息，也需要准备引用图片
-            if xmsg.ctype == ContextType.TEXT and hasattr(xmsg, '_refer_image_info') and xmsg._refer_image_info.get('has_refer_image'):
-                logger.debug(f"[wxpad] 检测到引用图片的文本消息，开始准备引用图片")
-                xmsg.prepare()  # 触发引用图片下载和缓存
-
-            # 如果是引用文件的文本消息，也需要准备引用文件
-            elif xmsg.ctype == ContextType.TEXT and hasattr(xmsg, '_refer_file_info') and xmsg._refer_file_info.get('has_refer_file'):
-                logger.debug(f"[wxpad] 检测到引用文件的文本消息，开始准备引用文件")
-                xmsg.prepare()  # 触发引用文件下载和缓存
-
             logger.info(f"[wxpad] 消息已提交处理")
             self.produce(context)
         else:

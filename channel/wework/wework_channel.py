@@ -4,7 +4,7 @@ import random
 import tempfile
 import threading
 os.environ['ntwork_LOG'] = "ERROR"
-import ntwork
+import lib.ntwork as ntwork
 import requests
 import uuid
 
@@ -261,7 +261,7 @@ class WeworkChannel(ChatChannel):
             logger.debug("[WX]receive voice for group msg: {}".format(cmsg.content))
         elif cmsg.ctype == ContextType.IMAGE:
             logger.debug("[WX]receive image for group msg: {}".format(cmsg.content))
-        elif cmsg.ctype in [ContextType.JOIN_GROUP, ContextType.PATPAT]:
+        elif cmsg.ctype in [ContextType.JOIN_GROUP,ContextType.EXIT_GROUP, ContextType.PATPAT]:
             logger.debug("[WX]receive note msg: {}".format(cmsg.content))
         elif cmsg.ctype == ContextType.TEXT:
             pass

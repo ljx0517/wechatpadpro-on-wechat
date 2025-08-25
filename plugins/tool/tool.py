@@ -2,6 +2,7 @@ from chatgpt_tool_hub.apps import AppFactory
 from chatgpt_tool_hub.apps.app import App
 from chatgpt_tool_hub.tools.tool_register import main_tool_register
 
+
 import plugins
 from bridge.bridge import Bridge
 from bridge.context import ContextType
@@ -16,6 +17,7 @@ from plugins import *
     desc="Arming your ChatGPT bot with various tools",
     version="0.5",
     author="goldfishh",
+    enabled=False,
     desire_priority=0,
 )
 class Tool(Plugin):

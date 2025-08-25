@@ -16,6 +16,7 @@ from .lib.WordsSearch import WordsSearch
     name="Banwords",
     desire_priority=100,
     hidden=True,
+    enabled=False,
     desc="判断消息中是否有敏感词、决定是否回复。",
     version="1.0",
     author="lanvent",

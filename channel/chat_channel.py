@@ -1,11 +1,9 @@
-import os
 import re
 import threading
 import time
 from asyncio import CancelledError
 from concurrent.futures import Future, ThreadPoolExecutor
 import requests
-import json
 import uuid
 
 from bridge.context import *
@@ -117,7 +115,7 @@ class ChatChannel(Channel):
 
     # 根据消息构造context，消息内容相关的触发项写在这里
     def _compose_context(self, ctype: ContextType, content, **kwargs):
-                    # wxpad/gewe风格兜底过滤：非用户消息直接 return None
+        # wxpad/gewe风格兜底过滤：非用户消息直接 return None
         cmsg = kwargs.get("msg")
         if cmsg and hasattr(cmsg, "_is_non_user_message") and cmsg._is_non_user_message(getattr(cmsg, "msg_source", ""), getattr(cmsg, "from_user_id", "")):
             logger.info(f"[chat_channel] ignore non-user/system message in _compose_context: from={getattr(cmsg, 'from_user_id', '')}")
@@ -143,7 +141,7 @@ class ChatChannel(Channel):
             if context.get("isgroup", False):
                 group_name = cmsg.other_user_nickname
                 group_id = cmsg.other_user_id
-                context["group_name"] = group_name
+                context["group_name"] = cmsg.group_name or cmsg.group_id or group_name
 
                 group_name_white_list = config.get("group_name_white_list", [])
                 group_name_keyword_white_list = config.get("group_name_keyword_white_list", [])
@@ -219,9 +217,13 @@ class ChatChannel(Channel):
                     content = subtract_res
                     
                     # 新增：彻底清理所有@前缀，确保传递给插件的是干净的命令
-                    content = re.sub(r"^@\S+\s+", "", content)
+                    if conf().get('clean_at_symbol', False):
+                        content = re.sub(r"^@\S+\s+", "", content)
                     logger.debug(f"[chat_channel] after cleaning all @ prefixes: {content}")
-                    
+
+                # 如若原始消息是语音消息，并且经过识别
+                if context.kwargs['origin_ctype'] == ContextType.VOICE:
+                    flag = True
                 if not flag:
                     logger.debug(f"[chat_channel] group message not match any produce condition, skip. content={content}")
                     return None
@@ -262,7 +264,7 @@ class ChatChannel(Channel):
             if context.get("isgroup", False):
                 valuable_types = [ContextType.FILE, ContextType.VIDEO, ContextType.IMAGE, ContextType.SHARING]
                 # 扩展：群系统事件（入群、拍一拍等）也应允许直通，供插件处理
-                valuable_types.extend([ContextType.JOIN_GROUP, ContextType.PATPAT])
+                valuable_types.extend([ContextType.JOIN_GROUP,ContextType.EXIT_GROUP, ContextType.PATPAT])
                 if ctype in valuable_types:
                     logger.info(f"[chat_channel] 有价值的消息类型直接触发: {ctype}, from={context['msg'].actual_user_id}")
                     # 对于非TEXT类型的有价值消息，允许通过
@@ -318,17 +320,17 @@ class ChatChannel(Channel):
             # 检查是否包含关键词
             has_keyword = check_contain(raw_content, conf().get("group_chat_keyword", []))
             # 检查是否是有价值的消息类型（这些类型可以无前缀触发）
-            valuable_types = [ContextType.FILE, ContextType.VIDEO, ContextType.IMAGE, ContextType.SHARING]
+            valuable_types = [ContextType.FILE, ContextType.VIDEO, ContextType.VOICE, ContextType.IMAGE, ContextType.SHARING]
             is_valuable_type = context.type in valuable_types
             
-            # 如果不是插件命令、不是有价值的消息类型，而且没有群聊前缀、不是@，也没有关键词，则不发送给DIFY
+            # 如果不是插件命令、不是有价值的消息类型，而且没有群聊前缀、不是@，也没有关键词，则不发送给Ai workflow
             if not is_plugin_command and not is_valuable_type and not has_group_prefix and not is_at and not has_keyword:
-                logger.debug(f"[chat_channel] group message without valid trigger, skip DIFY: {raw_content[:30]}...")
+                logger.debug(f"[chat_channel] group message without valid trigger, skip Ai Workflow: {raw_content[:30]}...")
                 return Reply(ReplyType.TEXT, "")  # 返回空回复，不触发DIFY
                 
-        # 否则才走 DIFY
-        # 原有 DIFY 处理逻辑
-        if not e_context.is_pass():
+        # 否则才走 bot
+        # 禁用，所有ai相关应该都从插件走，不应该在这里处理
+        if False and not e_context.is_pass():
             logger.debug("[chat_channel] ready to handle context: type={}, content={}".format(context.type, context.content))
             if context.type == ContextType.TEXT or context.type == ContextType.IMAGE_CREATE:  # 文字和图片消息
                 context["channel"] = e_context["channel"]

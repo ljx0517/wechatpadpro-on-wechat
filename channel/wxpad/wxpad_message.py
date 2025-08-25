@@ -1,4 +1,4 @@
-import base64
+import sys
 import uuid
 import re
 from bridge.context import ContextType
@@ -7,17 +7,16 @@ from common.log import logger
 from common.tmp_dir import TmpDir
 from config import conf
 from lib.wxpad.client import WxpadClient
-import requests
 import xml.etree.ElementTree as ET
-from common import memory
-
+import traceback
 
 class WechatPadProMessage(ChatMessage):
     def __init__(self, msg, client: WxpadClient = None):
         super().__init__(msg)
+
         self.msg = msg
         self.content = ''  # 初始化self.content为空字符串
-        
+        self.group_name = msg.get('group_name', None)
         # 安全初始化：确保关键属性在所有执行路径中都有默认值
         self.msg_source = ''
         self.from_user_id = ''
@@ -74,8 +73,12 @@ class WechatPadProMessage(ChatMessage):
             # msg_source 已在初始化时设置为默认值
             return
         self.msg_id = self.msg_data['NewMsgId']
-        self.is_group = True if "@chatroom" in self.msg_data['FromUserName']['string'] else False
-        
+        # self.is_group = True if ("@chatroom" in self.msg_data['FromUserName']['string'] or "@chatroom" in self.msg_data['ToUserName']['string'] ) else False
+        if "@chatroom" in self.msg_data['FromUserName']['string']:
+            self.group_id = self.msg_data['FromUserName']['string']
+        if "@chatroom" in self.msg_data['ToUserName']['string']:
+            self.group_id = self.msg_data['ToUserName']['string']
+        self.is_group = self.group_id is not None
         # 更新msg_source属性（覆盖初始化时的默认值）
         self.msg_source = self.msg_data.get('MsgSource', '')
 
@@ -105,19 +108,19 @@ class WechatPadProMessage(ChatMessage):
             self.ctype = ContextType.VOICE
             # 生成语音文件路径
             silk_file_name = f"voice_{uuid.uuid4()}.silk"
-            self.content = TmpDir().path() + silk_file_name
+            self.content = TmpDir(self.group_name or self.group_id).path() + silk_file_name
             # 设置延迟下载函数
             self._prepare_fn = self.download_voice
         elif msg_type == 43:  # Video message
             self.ctype = ContextType.VIDEO
             # 生成视频文件路径
             video_file_name = f"video_{uuid.uuid4()}.mp4"
-            self.content = TmpDir().path() + video_file_name
+            self.content = TmpDir(self.group_name or self.group_id).path() + video_file_name
             # 设置延迟下载函数
             self._prepare_fn = self.download_video
         elif msg_type == 3:  # Image message
             self.ctype = ContextType.IMAGE
-            self.content = TmpDir().path() + str(self.msg_id) + ".png"
+            self.content = TmpDir(self.group_name or self.group_id).path() + str(self.msg_id) + ".png"
             self._prepare_fn = self.download_image
         elif msg_type == 49:  # 引用消息，小程序，公众号等
             # After getting content_xml
@@ -148,7 +151,7 @@ class WechatPadProMessage(ChatMessage):
                         if appattach is not None:
                             fileext = appattach.find('fileext').text if appattach.find('fileext') is not None else ""
                             file_name = f"file_{uuid.uuid4()}.{fileext}" if fileext else f"file_{uuid.uuid4()}"
-                            self.content = TmpDir().path() + file_name
+                            self.content = TmpDir(self.group_name or self.group_id).path() + file_name
                             self._prepare_fn = self.download_file
                             # 保存文件信息，用于下载
                             self._file_info = {
@@ -323,7 +326,7 @@ class WechatPadProMessage(ChatMessage):
                                     if isinstance(nick_name, dict):
                                         nick_name = nick_name.get('str', nick_name.get('string', self.other_user_id))
                                     self.other_user_nickname = nick_name
-                                    
+
                                     # 保存群名称到数据库
                                     try:
                                         from database.group_members_db import save_group_info
@@ -379,7 +382,7 @@ class WechatPadProMessage(ChatMessage):
                 logger.debug(f"[wxpad] 从数据库获取用户昵称失败: {e}")
                 self.other_user_nickname = self.other_user_id
 
-        logger.debug(f"[wxpad] 准备进入群聊消息解析逻辑: is_group={self.is_group}")
+        logger.debug(f"[wxpad] 准备进入群聊消息解析逻辑: is_group={self.is_group}, name={self.group_name}")
 
         if self.is_group:
             # 群聊消息：获取实际发送者信息
@@ -410,11 +413,11 @@ class WechatPadProMessage(ChatMessage):
             # 尝试从XML解析@列表
             if msg_source:
                 try:
-                    root = ET.fromstring(msg_source)
+                    root = ET.fromstring("<root>" + msg_source + "</root>").find('msgsource')
                     atuserlist_elem = root.find('atuserlist')
                     if atuserlist_elem is not None and atuserlist_elem.text:
                         self.is_at = self.to_user_id in atuserlist_elem.text
-                except ET.ParseError:
+                except ET.ParseError as e:
                     # XML解析失败，检查消息内容
                     push_content = self.msg_data.get('PushContent', '')
                     original_content_dict = self.msg_data.get('Content', {})
@@ -426,7 +429,8 @@ class WechatPadProMessage(ChatMessage):
             self.content = str(self.content)
             if self.actual_user_id:
                 self.content = re.sub(f'{re.escape(self.actual_user_id)}:\n', '', self.content)
-            self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)
+            if conf().get('clean_at_symbol', False):
+                self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)
         else:
             # 私聊消息：统一字段设置
             self.actual_user_id = self.other_user_id
@@ -436,6 +440,10 @@ class WechatPadProMessage(ChatMessage):
 
     def download_voice(self):
         """通过API下载语音并转换为MP3"""
+        import os
+        if os.path.exists(self.content):
+            return
+
         try:
             if not self.client:
                 logger.error("[wxpad] 没有客户端实例，无法下载语音")
@@ -504,7 +512,7 @@ class WechatPadProMessage(ChatMessage):
                         voice_data = base64.b64decode(voice_base64)
                         
                         # 保存SILK文件
-                        silk_file_path = self.content
+                        silk_file_path = os.path.splitext(self.content)[0] + '.silk'
                         with open(silk_file_path, "wb") as f:
                             f.write(voice_data)
                         
@@ -533,6 +541,8 @@ class WechatPadProMessage(ChatMessage):
                 logger.error(f"[wxpad] 解析语音XML失败: {e}, 内容: {content_xml[:50]}...")
                 
         except Exception as e:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            stack_info = ''.join(traceback.format_tb(exc_traceback))
             logger.error(f"[wxpad] 语音文件下载异常: {e}", exc_info=True)
 
     def _extract_cdn_info_from_xml(self, xml_content: str) -> dict:
@@ -581,7 +591,7 @@ class WechatPadProMessage(ChatMessage):
 
             # 使用MD5作为文件名，方便查找
             if cdn_info.get('md5'):
-                self.content = TmpDir().path() + cdn_info['md5'] + ".jpg"
+                self.content = TmpDir(self.group_name or self.group_id).path() + cdn_info['md5'] + ".jpg"
             else:
                 base_path = os.path.splitext(self.content)[0]
                 self.content = base_path + ".jpg"
@@ -637,7 +647,7 @@ class WechatPadProMessage(ChatMessage):
 
             # 使用MD5作为文件名，方便查找
             if cdn_info.get('md5'):
-                self.content = TmpDir().path() + cdn_info['md5'] + ".jpg"
+                self.content = TmpDir(self.group_name or self.group_id).path() + cdn_info['md5'] + ".jpg"
             else:
                 base_path = os.path.splitext(self.content)[0]
                 self.content = base_path + ".jpg"
@@ -762,7 +772,7 @@ class WechatPadProMessage(ChatMessage):
 
             # 使用MD5作为文件名，方便查找
             if video_info.get('md5'):
-                self.content = TmpDir().path() + video_info['md5'] + ".mp4"
+                self.content = TmpDir(self.group_name or self.group_id).path() + video_info['md5'] + ".mp4"
             
             # 检查文件是否已存在，避免重复下载
             if os.path.exists(self.content):
@@ -815,7 +825,7 @@ class WechatPadProMessage(ChatMessage):
             # 使用MD5作为文件名，方便查找
             if file_info.get('md5'):
                 file_ext = f".{file_info['fileext']}" if file_info.get('fileext') else ""
-                self.content = TmpDir().path() + file_info['md5'] + file_ext
+                self.content = TmpDir(self.group_name or self.group_id).path() + file_info['md5'] + file_ext
             
             # 检查文件是否已存在，避免重复下载
             if os.path.exists(self.content):
@@ -1013,7 +1023,7 @@ class WechatPadProMessage(ChatMessage):
             else:
                 file_name = f"refer_file_{uuid.uuid4()}.{file_ext}" if file_ext else f"refer_file_{uuid.uuid4()}"
             
-            file_path = TmpDir().path() + file_name
+            file_path = TmpDir(self.group_name or self.group_id).path() + file_name
             
             # 检查文件是否已存在，避免重复下载
             if not os.path.exists(file_path):
