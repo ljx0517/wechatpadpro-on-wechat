@@ -20,10 +20,15 @@ RUN uv python install 3.12
 #WORKDIR /app
 #RUN --mount=type=cache,target=/root/.cache/uv \
 #    uv sync --frozen --no-dev --no-editable
+
+
+COPY . /app
+WORKDIR /app
+
 #FROM --platform=linux/amd64 gcr.io/distroless/cc
 FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-COPY . /app
+COPY --from=builder /app /app
 WORKDIR /app
 
 
