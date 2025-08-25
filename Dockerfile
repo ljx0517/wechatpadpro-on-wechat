@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . /app
 
 # Production Stage
-FROM python:3.12-slim-bookworm AS production
+FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/python:3.12 AS production
 
 WORKDIR /app
 
