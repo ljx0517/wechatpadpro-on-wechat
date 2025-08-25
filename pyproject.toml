@@ -1,0 +1,33 @@
+[project]
+name = "wechatpadpro-on-wechat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "azure-cognitiveservices-speech>=1.45.0",
+    "beautifulsoup4>=4.13.4",
+    "chardet>=5.2.0",
+    "chatgpt-tool-hub>=0.1.0",
+    "gradio>=5.43.1",
+    "htmlparser>=0.0.2",
+    "langid>=1.1.6",
+    "lxml>=6.0.1",
+    "lxml-html-clean>=0.4.2",
+    "nest-asyncio>=1.6.0",
+    "newspaper3k>=0.2.8",
+    "openai>=1.101.0",
+    "pilk>=0.2.4",
+    "pillow>=11.3.0",
+    "pydub>=0.25.1",
+    "pymysql>=1.1.1",
+    "pyqrcode>=1.2.1",
+    "pysilk>=0.0.1",
+    "qrcode>=8.2",
+    "redis>=6.4.0",
+    "requests>=2.32.5",
+    "requests-html>=0.10.0",
+    "silk-python>=0.2.7",
+    "uuid>=1.30",
+    "websocket-client>=1.8.0",
+]
