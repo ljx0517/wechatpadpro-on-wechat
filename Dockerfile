@@ -26,7 +26,7 @@ COPY . /app
 FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
 
 # Copy the Python version
-#COPY --from=builder --chown=python:python /python /python
+COPY --from=builder --chown=python:python /python /python
 
 WORKDIR /app
 RUN uv sync --frozen --no-dev --no-editable
