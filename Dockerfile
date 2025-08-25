@@ -13,11 +13,11 @@ COPY --from=iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/python-uv:250825
 # Set environment variables for uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-WORKDIR /app
+
 
 # Copy project files and lockfile
 COPY pyproject.toml uv.lock /app/
-
+WORKDIR /app
 # Install dependencies with uv
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
