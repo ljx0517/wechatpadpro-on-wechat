@@ -1,53 +1,42 @@
-#FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:bookworm-slim AS builder
-FROM ghcr.io/astral-sh/uv:bookworm-slim AS builder
+# Builder Stage
+FROM python:3.12-slim-bookworm AS builder
+
+# Install build dependencies including gcc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy uv from its official image
+COPY --from=ghcr.io/astral-sh/uv:bookworm-slim /uv /bin/uv
+
+# Set environment variables for uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Configure the Python directory so it is consistent
-ENV UV_PYTHON_INSTALL_DIR=/python
+WORKDIR /app
 
-# Only use the managed Python version
-ENV UV_PYTHON_PREFERENCE=only-managed
+# Copy project files and lockfile
+COPY pyproject.toml uv.lock /app/
 
-# Install Python before the project for caching
-RUN uv python install 3.12
-#RUN apt-get update
-#RUN apt-get install -y --no-install-recommends gcc
-#WORKDIR /app
-#RUN --mount=type=cache,target=/root/.cache/uv \
-#    --mount=type=bind,source=uv.lock,target=uv.lock \
-#    --mount=type=bind,source=pyproject.toml,target=pyproject.toml
-#COPY . /app
-#WORKDIR /app
-#RUN --mount=type=cache,target=/root/.cache/uv \
-#    uv sync --frozen --no-dev --no-editable
+# Install dependencies with uv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
 
-
+# Copy application code
 COPY . /app
+
+# Production Stage
+FROM python:3.12-slim-bookworm AS production
+
 WORKDIR /app
 
-#FROM --platform=linux/amd64 gcr.io/distroless/cc
-#FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
-FROM gcc
-COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-COPY --from=builder /app /app
-WORKDIR /app
+# Copy the virtual environment from the builder stage
+COPY --from=builder /app/.venv /app/.venv
 
-
-# Then, use a final image without uv
-#FROM --platform=linux/amd64 gcr.io/distroless/cc
-#
-## Copy the Python version
-#COPY --from=builder --chown=python:python /python /python
-#
-#WORKDIR /app
-#RUN uv sync
-## Copy the application from the builder
-#COPY --from=builder --chown=app:app /app/.venv /app/.venv
-
-# Place executables in the environment at the front of the path
+# Set up the PATH to include the virtual environment's binaries
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PATH="/usr/local/bin:$PATH"
-RUN uv sync
-# Run the FastAPI application by default
-#CMD ["fastapi", "run", "--host", "0.0.0.0", "/app/.venv/lib/python3.12/site-packages/uv_docker_example"]
+
+# Expose port and define the command to run your application
+#EXPOSE 8000
+#CMD ["uvicorn", "your_app_module:app", "--host", "0.0.0.0", "--port", "8000"]
 CMD ["python", "app.py"]
