@@ -20,8 +20,7 @@ from common.singleton import singleton
 from common.tmp_dir import TmpDir
 from config import conf
 from lib.wxpad.client import WxpadClient
-import uuid
-from PIL import Image
+
 
 MAX_UTF8_LEN = 2048
 ROBOT_STAT_PATH = os.path.join(os.path.dirname(__file__), '../../resource/robot_stat.json')
@@ -911,6 +910,7 @@ class WxpadChannel(ChatChannel):
                     temp_path = None
                     try:
                         temp_dir = TmpDir().path()
+                        import uuid
                         temp_path = os.path.join(temp_dir, f"downloaded_video_{uuid.uuid4().hex[:8]}.mp4")
 
                         logger.info(f"[wxpad] 正在下载视频至临时文件: {temp_path}")
@@ -1520,6 +1520,7 @@ class WxpadChannel(ChatChannel):
         Returns:
             bool: 发送是否成功
         """
+        from PIL import Image
         temp_file_path = None
         try:
             # 根据数据类型处理图片，直接转换为base64
