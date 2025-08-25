@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy uv from its official image
-COPY --from=iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/python-uv:250825.1 /uv /bin/uv
+COPY --from=iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/python-uv:250825.1 /usr/local/bin/uv /usr/local/bin/uv
 
 # Set environment variables for uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
