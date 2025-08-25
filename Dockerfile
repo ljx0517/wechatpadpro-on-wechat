@@ -24,7 +24,7 @@ COPY . /app
 
 # Then, use a final image without uv
 FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
-
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 # Copy the Python version
 COPY --from=builder --chown=python:python /python /python
 
