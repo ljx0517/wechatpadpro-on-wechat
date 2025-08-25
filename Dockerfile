@@ -16,14 +16,15 @@ RUN uv python install 3.12
 #RUN --mount=type=cache,target=/root/.cache/uv \
 #    --mount=type=bind,source=uv.lock,target=uv.lock \
 #    --mount=type=bind,source=pyproject.toml,target=pyproject.toml
-COPY . /app
-WORKDIR /app
+#COPY . /app
+#WORKDIR /app
 #RUN --mount=type=cache,target=/root/.cache/uv \
 #    uv sync --frozen --no-dev --no-editable
 #FROM --platform=linux/amd64 gcr.io/distroless/cc
 FROM iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-
+COPY . /app
+WORKDIR /app
 
 
 # Then, use a final image without uv
@@ -39,6 +40,7 @@ COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/usr/local/bin:$PATH"
 RUN ls /usr/local/bin
 RUN ls
 RUN uv sync
