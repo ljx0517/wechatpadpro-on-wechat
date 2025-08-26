@@ -121,7 +121,7 @@ services:
       - wechatpadpro-network
 
   wechatpadpro_mysql:
-    image: mysql:8.0
+    image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/mysql:8.1.0
     platform: linux/amd64
     restart: always
     environment:
@@ -150,7 +150,7 @@ services:
       - wechatpadpro-network
 
   wechatpadpro_redis:
-    image: redis:6
+    image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/redis:6
     platform: linux/amd64
     restart: always
     command: redis-server --appendonly yes
@@ -169,7 +169,7 @@ services:
       - wechatpadpro-network
 
   wechatpadpro_rabbitmq:
-    image: rabbitmq:3.11.9-management
+    image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/rabbitmq:3.11.9-management
 #    platform: linux/amd64
     env_file:
       - .env
