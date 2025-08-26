@@ -21,7 +21,7 @@ WORKDIR /app
 #RUN --mount=type=cache,target=/root/.cache/uv \
 #    uv sync --frozen --no-dev --no-editable
 #FROM --platform=linux/amd64 gcr.io/distroless/cc
-FROM  gcr.io/distroless/cc
+FROM  iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/distroless_cc:250825.2
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 
