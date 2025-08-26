@@ -1,3 +1,6 @@
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true # Designates this as the primary index
 [project]
 name = "wechatpadpro-on-wechat"
 version = "0.1.0"
