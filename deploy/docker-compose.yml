@@ -172,6 +172,7 @@ services:
 #    image: rabbitmq:3.11.9-management
     image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/rabbitmq:3.11.9-management
 #    platform: linux/amd64
+    privileged: true
     env_file:
       - .env
     ports:
