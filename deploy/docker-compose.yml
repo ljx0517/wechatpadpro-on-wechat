@@ -169,6 +169,7 @@ services:
       - wechatpadpro-network
 
   wechatpadpro_rabbitmq:
+#    image: rabbitmq:3.11.9-management
     image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/rabbitmq:3.11.9-management
 #    platform: linux/amd64
     env_file:
