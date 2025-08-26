@@ -124,13 +124,14 @@ services:
     image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/mysql:8.1.0
     platform: linux/amd64
     restart: always
+    command: --default-authentication-plugin=mysql_native_password --innodb_strict_mode=OFF
     environment:
       # MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
       # MYSQL_DATABASE: ${MYSQL_DATABASE:-weixin}
       # MYSQL_USER: ${MYSQL_USER:-weixin}
       # MYSQL_PASSWORD: ${MYSQL_PASSWORD:-weixin123}
 
-
+      - MYSQL_HOST= '0.0.0.0'
       - MYSQL_PORT=${MYSQL_PORT}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
