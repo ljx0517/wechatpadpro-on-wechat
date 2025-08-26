@@ -1,0 +1,215 @@
+
+services:
+  wechatpadpro_server:
+    image: iplayabc-docker.pkg.coding.net/huaweicloud/ireadabc/wechatpadpro:816
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "${WECHAT_PORT:-8080}:8080"
+      - "${PORT:-1238}:1238"
+    env_file:
+      - .env
+    environment:
+      # 基础配置
+      - HOST=${HOST}
+      - WECHAT_PORT=${WECHAT_PORT}
+      - PORT=${PORT}
+      - TZ=${TZ}
+      - GH_WXID=${GH_WXID}
+      - ADMIN_KEY=${ADMIN_KEY}
+      
+      # API版本前缀
+      - API_VERSION=${API_VERSION}
+      
+      # MCP服务端口
+      - MCP_PORT=${MCP_PORT}
+      
+      # Worker配置
+      - WORKER_POOL_SIZE=${WORKER_POOL_SIZE}
+      - MAX_WORKER_TASK_LEN=${MAX_WORKER_TASK_LEN}
+      
+      # Web配置
+      - WEB_DOMAIN=${WEB_DOMAIN}
+      - WEB_TASK_NAME=${WEB_TASK_NAME}
+      - WEB_TASK_APP_NUMBER=${WEB_TASK_APP_NUMBER}
+      - NEWS_SYN_WXID=${NEWS_SYN_WXID}
+      - DT=${DT}
+      
+      # 消息队列配置
+      - TOPIC=${TOPIC}
+      - ROCKET_MQ_ENABLED=${ROCKET_MQ_ENABLED}
+      - ROCKET_MQ_HOST=${ROCKET_MQ_HOST}
+      - ROCKET_ACCESS_KEY=${ROCKET_ACCESS_KEY}
+      - ROCKET_SECRET_KEY=${ROCKET_SECRET_KEY}
+      - RABBIT_MQ_ENABLED=${RABBIT_MQ_ENABLED}
+      - RABBIT_MQ_URL=${RABBIT_MQ_URL}
+      - KAFKA_ENABLED=${KAFKA_ENABLED}
+      - KAFKA_URL=${KAFKA_URL}
+      - KAFKA_USERNAME=${KAFKA_USERNAME}
+      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+      
+      # MySQL配置
+      # - MYSQL_PORT=${MYSQL_PORT}
+      # - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # - MYSQL_DATABASE=${MYSQL_DATABASE}
+      # - MYSQL_USER=${MYSQL_USER}
+      # - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_CONNECT_STR=${MYSQL_CONNECT_STR}
+      - DB_HOST=wechatpadpro_mysql
+      # - DB_PORT=${DB_PORT}
+      # - DB_DATABASE=${DB_DATABASE}
+      # - DB_USERNAME=${DB_USERNAME}
+      # - DB_PASSWORD=${DB_PASSWORD}
+      
+      # Redis配置
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_HOST=wechatpadpro_redis
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_MAX_IDLE=${REDIS_MAX_IDLE}
+      - REDIS_MAX_ACTIVE=${REDIS_MAX_ACTIVE}
+      - REDIS_IDLE_TIMEOUT=${REDIS_IDLE_TIMEOUT}
+      - REDIS_MAX_CONN_LIFETIME=${REDIS_MAX_CONN_LIFETIME}
+      - REDIS_CONNECT_TIMEOUT=${REDIS_CONNECT_TIMEOUT}
+      - REDIS_READ_TIMEOUT=${REDIS_READ_TIMEOUT}
+      - REDIS_WRITE_TIMEOUT=${REDIS_WRITE_TIMEOUT}
+      
+      # 调试模式
+      - DEBUG=${DEBUG}
+      
+      # 任务配置
+      - TASK_RETRY_COUNT=${TASK_RETRY_COUNT}
+      - TASK_RETRY_INTERVAL=${TASK_RETRY_INTERVAL}
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL}
+      - AUTO_AUTH_INTERVAL=${AUTO_AUTH_INTERVAL}
+      - AUTO_SYNC_INTERVAL_MINUTES=${AUTO_SYNC_INTERVAL_MINUTES}
+      - TASK_EXEC_WAIT_TIMES=${TASK_EXEC_WAIT_TIMES}
+      - QUEUE_EXPIRE_TIME=${QUEUE_EXPIRE_TIME}
+      
+      # WebSocket配置
+      - WS_HANDSHAKE_TIMEOUT=${WS_HANDSHAKE_TIMEOUT}
+      - WS_READ_BUFFER_SIZE=${WS_READ_BUFFER_SIZE}
+      - WS_WRITE_BUFFER_SIZE=${WS_WRITE_BUFFER_SIZE}
+      - WS_READ_DEADLINE=${WS_READ_DEADLINE}
+      - WS_WRITE_DEADLINE=${WS_WRITE_DEADLINE}
+      - WS_PING_INTERVAL=${WS_PING_INTERVAL}
+      - WS_CONNECTION_CHECK_INTERVAL=${WS_CONNECTION_CHECK_INTERVAL}
+      - WS_MAX_MESSAGE_SIZE=${WS_MAX_MESSAGE_SIZE}
+      
+      # 集群配置
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - ZK_ADDR=${ZK_ADDR}
+      - ETCD_ADDR=${ETCD_ADDR}
+      
+      # 禁用命令
+      - DISABLED_CMD_LIST=${DISABLED_CMD_LIST}
+    volumes:
+      - ./.env:/app/.env
+    depends_on:
+      wechatpadpro_mysql:
+       condition: service_healthy
+      wechatpadpro_redis:
+        condition: service_healthy
+      wechatpadpro_rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123456}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - wechatpadpro-network
+
+  wechatpadpro_mysql:
+    image: mysql:8.0
+    platform: linux/amd64
+    restart: always
+    environment:
+      # MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      # MYSQL_DATABASE: ${MYSQL_DATABASE:-weixin}
+      # MYSQL_USER: ${MYSQL_USER:-weixin}
+      # MYSQL_PASSWORD: ${MYSQL_PASSWORD:-weixin123}
+
+
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123456}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - wechatpadpro-network
+
+  wechatpadpro_redis:
+    image: redis:6
+    platform: linux/amd64
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      REDIS_ARGS: "--requirepass ${REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - wechatpadpro-network
+
+  wechatpadpro_rabbitmq:
+    image: rabbitmq:3.11.9-management
+#    platform: linux/amd64
+    env_file:
+      - .env
+    ports:
+      - 5672:5672
+      - 15672:15672
+    networks:
+      - wechatpadpro-network
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_MQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_MQ_PASS}
+    volumes:
+      - ./rabbitmq_data/:/var/lib/rabbitmq/
+      - ./rabbitmq_log/:/var/log/rabbitmq
+      - ./rabbit_enabled_plugins:/etc/rabbitmq/enabled_plugins
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_running" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s # Give RabbitMQ time to start up
+
+    # configs:
+    #   - source: plugins
+    #     target: /etc/rabbitmq/
+
+#  wechatpadpro-on-wecha:
+#    image: wechatpadpro-on-wechat:250825.1
+#    depends_on:
+#      wechatpadpro_server:
+#        condition: service_healthy
+
+
+networks:
+  wechatpadpro-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  rabbitmq_log:
+  rabbit_enabled_plugins:

@@ -1,0 +1,5 @@
+deploy/rabbitmq_data
+deploy/rabbitmq_log
+deploy/log
+deploy/data
+.venv
